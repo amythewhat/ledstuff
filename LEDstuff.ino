@@ -2,7 +2,6 @@
 
 #define PIN 6  // to leds
 #define LIN_OUT 1
-//#define LOG_OUT 1
 #define FHT_N 256
 #include <FHT.h>
 #include <SPI.h>
@@ -11,7 +10,6 @@
 #define BUFFERSIZE 128
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, PIN, NEO_GRB + NEO_KHZ800);
-
 
 byte SampleL[60];
 
@@ -65,19 +63,6 @@ void setup() {
 }
 
 void doInit() {
-    #ifdef DEBUG
-    Serial.println("doInit()");
-    #endif
-    
-    sampleInput();
-    sampleFix();
-    
-    byte zNoise = 0;
-    for (int i=1; i < FHT_N/2; i++) {
-        zNoise = SampleL[i] + zNoise;
-    }
-    NoiseFloor = zNoise/sizeof(SampleL);
-    
     colorWipe(strip.Color((MaxBrightness * 255), 0, 0), 1);
     colorWipe(strip.Color(0, (MaxBrightness * 255), 0), 1);
     colorWipe(strip.Color(0, 0, (MaxBrightness * 255)), 1);
@@ -91,9 +76,8 @@ void loop() {
     doAnalyze(); 
 //    doFade();
 
-//      drawSpectrum();
+//    drawSpectrum();
 }
-
 
 void doFade() {
     #ifdef DEBUG
@@ -109,24 +93,15 @@ void doFade() {
 }
 
 void drawSpectrum () {
-    #ifdef DEBUG
-    Serial.println("drawSpectrum()");
-    #endif
-    
     strip.setBrightness(255);
     for (int i=0; i < displaySize; i++) {
         strip.setPixelColor(i, strip.Color(50, 0, 0));
 //        strip.setPixelColor(i, strip.Color(SampleL[i]*MaxBrightness, 0, 0));
     }
     strip.show();
-//    delay(1);
 }
 
 void doAnalyze() {
-    #ifdef DEBUG
-    Serial.println("doAnalyze");
-    #endif
-    
     float zVal;
     uint8_t zLowMax = 0;
     uint16_t zLowTotal = 0;
@@ -159,9 +134,12 @@ void doAnalyze() {
     float zLowVal = ((1-zLowMaxNorm)/(1-zLowAvgNorm));
 //    float zLowVal = (zLowMax-zLowAvg)/255.;
 
-// how to detect a beat??
-
-//// LEFT OFF HERE
+/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+//////////////////      how to detect a beat??
+/////////////////////////////////////////////////////////////////////////////
+////////////////////////// LEFT OFF HERE
+/////////////////////////////////////////////////////////////////////////////
     uint8_t tempPos = 0;
     if (putPos == 0) tempPos = BUFFERSIZE-1;
     else tempPos = putPos-1;
@@ -171,11 +149,7 @@ void doAnalyze() {
     zPrevLow = LowSamples[tempPos];
     zLowAttackSharpness = SampleL[LowBand] - zPrevLow;
     zLowAttackSharpness = (zLowAttackSharpness * .2) + zLowAttackSharpness;
-    if (SampleL[LowBand] > zLowAvg
-    LowSamples
-(zLowMax - Threshold*255)
-zLowAvgNorm
-zLowSamples[tempPos]
+    // if (SampleL[LowBand] > zLowAvg
 
     if (SampleL[LowBand] > 200 && (currentMicros - previousMicros) > interval)
     {
@@ -194,56 +168,9 @@ zLowSamples[tempPos]
 //        doFade();
 //    }
 //    if (SampleL[LowBand] < Threshold && zLowVal > 0) drawSpectrum();
-    
-    #ifdef DEBUG
-    Serial.print("\tzLowMax: ");
-    Serial.print(zLowMax);
-    Serial.print("\tzLowTotal: ");
-    Serial.print(zLowTotal);
-    Serial.print("\tzLowAvg: ");
-    Serial.print(zLowAvg);
-    Serial.print("\tzLowVal: ");
-    Serial.println(zLowVal);
-    #endif
-    
-//    if (SampleL[LowBand] > 150) {
-////        Serial.println("\tyes, do drawSpectrum");
-//        drawSpectrum();
-//    }
-
-//    float zValNorm = float(SampleL[LowBand])/255.;
-//    float zAvgNorm = zAvg/255.;
-//    zVal = (1-zValNorm)/(1-zAvgNorm);
-//    if (zVal < Threshold && zVal > 0) drawSpectrum();
-    
-//
-//    #ifdef DEBUG
-//    Serial.println("");
-//    Serial.print("\tsize: ");
-//    Serial.print(sizeof(AvgLowRALong));
-//    Serial.print("\tzTotal: ");
-//    Serial.print(zTotal);
-//    Serial.print("\tzMax: ");
-//    Serial.print(zMax);
-//    Serial.print("\t\tzAvg: ");
-//    Serial.println(zAvg);
-//
-//    Serial.print("\tSampleL[LowBand]: ");
-//    Serial.print(SampleL[LowBand]);
-//    Serial.print("\tzValNorm: ");
-//    Serial.print(zValNorm);
-//    Serial.print("\tzAvgNorm: ");
-//    Serial.print(zAvgNorm);
-//    Serial.print("\tzVal: ");
-//    Serial.println(zTempVal);
-//    #endif
 }
 
 void sampleInput() {
-    #ifdef DEBUG
-    Serial.println("sampleInput()");
-    #endif
-    
     cli();  // UDRE interrupt slows this way down on arduino1.0
     for (int x=0; x<FHT_N; x++) {
         while(!(ADCSRA & 0x10)); // wait for adc to be ready
@@ -263,10 +190,6 @@ void sampleInput() {
 }
 
 void sampleFix() {
-    #ifdef DEBUG
-    Serial.println("sampleFix()");
-    #endif
-    
     int newPos; 
     float fhtCount, tempY;
     int lowBin = 0;
@@ -290,120 +213,8 @@ void sampleFix() {
     putPos = (putPos + 1) & (BUFFERSIZE-1);
     if (putPos > BUFFERSIZE-1)putPos = BUFFERSIZE-1;
     if (putPos < 0) putPos = 0;
-    
-    
-    #ifdef DEBUG
-    Serial.print("\tSampleL[LowBand]: ");
-    Serial.print(SampleL[LowBand]);
-    Serial.println("");
-    Serial.print("\tBUFFERSIZE: ");
-    Serial.print(BUFFERSIZE);
-    Serial.print("\tputPos: ");
-    Serial.println(putPos);
-    #endif
-
-/////////////////////////////////////////////////////////////////
-///////////// CIRCULAR ARRAY THINGY //////////////////////////
-/////////////////////////////////////////////////////////////////
-
-    
-//    // getcount is how many entries, getsize is length of array
-//    Serial.print("\tLowSamples: (");
-//    for (int i=0; i < LowSamples.getSize(); i++) {
-//        Serial.print(LowSamples.getElement(i));
-//        Serial.print(",");
-//    }
-//    Serial.println("");
-//    
-//    if (samples % RASamples == 0) {
-//        AvgLowRALong.addValue(LowSamples.getAverage());
-//        AvgMidRALong.addValue(MidSamples.getAverage());
-//    }
-    // getcount is how many entries, getsize is length of array
-    #ifdef DEBUG
-    Serial.print("\tLowSamples: (");
-    for (int i=0; i < sizeof(LowSamples); i++) {
-        Serial.print(LowSamples[i]);
-        Serial.print(",");
-    }
-    Serial.println("");
-    #endif
-    
-//    if (samples % RASamples == 0) {
-//        AvgLowRALong.addValue(LowSamples.getAverage());
-//        AvgMidRALong.addValue(MidSamples.getAverage());
-//    }
-
-
-//    Serial.print("\tSampleL: (");
-//    for (int i = 0 ; i < FHT_N/2 ; i++) {
-//        Serial.print(SampleL[i]);
-//        Serial.print(",");
-//    }
-//    Serial.println(")");
-//
-////////////////////////////////////////////////////////////////////////////////////////////
-//    uint8_t zVal;
-//    uint8_t zMax = 0;
-//    uint16_t zTotal = 0;
-//
-//    for (int i=0; i < BUFFERSIZE; i++) {
-//        zTotal += LowSamples[i];
-//        if (LowSamples[i] > zMax) {
-//            zMax = LowSamples[i];
-//        }
-//        zTotal = zTotal + AvgLowRALong[i];
-//    }
-//    
-//    uint8_t zAvg = zTotal/sizeof(AvgLowRALong);
-////    int zAvg = AvgLowRALong.getAverage();
-//
-////    #ifdef DEBUG
-////    Serial.println("");
-////    Serial.print("\tsize: ");
-////    Serial.print(sizeof(AvgLowRALong));
-////    Serial.print("\tzTotal: ");
-////    Serial.print(zTotal);
-////    Serial.print("\tzMax: ");
-////    Serial.print(zMax);
-////    Serial.print("\t\tzAvg: ");
-////    Serial.println(zAvg);
-////    #endif
-//    
-////    zVal = map(SampleL[LowBand], AvgLowRALong.getAverage(), AvgLowRALong.getMax(), 0, 100);
-////    Serial.print(int(SampleL[LowBand]));
-//    float zValNorm = float(SampleL[LowBand])/255.;
-//    float zAvgNorm = float(zAvg)/255.;
-//    float zTempVal = (1-zValNorm)/(1-zAvgNorm);
-//    if (zTempVal < Threshold && zTempVal > 0) drawSpectrum();
-//
-//    zVal = zValNorm/zAvgNorm;
-//    
-//    #ifdef DEBUG
-//    Serial.print("\tSampleL[LowBand]: ");
-//    Serial.print(SampleL[LowBand]);
-//    Serial.print("\tzValNorm: ");
-//    Serial.print(zValNorm);
-//    Serial.print("\tzAvgNorm: ");
-//    Serial.print(zAvgNorm);
-//    Serial.print("\tzVal: ");
-//    Serial.println(zTempVal);
-//    #endif
-/////////////////////////////////////////////////////////////////////////////////
 
 }  
-  
-
-void ISRBassWait () {
-    #ifdef DEBUG
-    Serial.println("ISRBassWait()");
-    #endif
-    
-    for ( int i = 0 ; i < 60 ; i++ ) {
-        uint32_t zcolor = strip.getPixelColor(i);
-    }
-}
-
 
 // Fill the dots one after the other with a color
 void colorWipe(uint32_t c, uint8_t wait) {
@@ -413,24 +224,3 @@ void colorWipe(uint32_t c, uint8_t wait) {
       delay(wait);
   }
 }
-
-
-//      SampleL[x] = tempY/256*MaxBrightness;
-   
-//     if ( tempY > 1 ) { SampleL[x] = ((tempY/(FHT_N/2))*100); }    // single channel full 16 LED high
-//     else { SampleL[x] = 0; }
-////    } else { sampleR[x] = ((tempY/256)*16); }    // single channel full 16 LED high
-
-
-//  Serial.println("SampleL[x]");
-//  Serial.println(sampleSet);
-//for ( int i=1; i < displaySize; i++ ) {
-//  if ( i == displaySize-1 ) {
-//    Serial.println(SampleL[i]);
-//  }
-//  else {
-//  Serial.print(SampleL[i]);
-//  Serial.print(", ");
-//  }
-//}
-
