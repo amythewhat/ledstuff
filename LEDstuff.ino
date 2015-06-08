@@ -1,5 +1,3 @@
-//#define DEBUG
-
 #define PIN 6  // to leds
 #define LIN_OUT 1
 #define FHT_N 256
@@ -13,13 +11,12 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, PIN, NEO_GRB + NEO_KHZ800);
 
 byte SampleL[60];
 
-unsigned long interval = 75000;    // min time to wait before doing stuff
+unsigned long interval = 333000;    // max time between beats
 unsigned long previousMicros = 0;
 unsigned long currentMicros = 0;
 
 int displaySize = 60;
 float MaxBrightness = .5;
-int OkGo = 0;
 int MaxLoudness = 1;
 float Threshold = .05;
 int FadeStep = 10;
@@ -27,63 +24,47 @@ int NoiseFloor;
 int LowBand = 1;
 int MidBand = 4;
 
-int RASamples = BUFFERSIZE;        // put whatever is here into the below
 uint8_t LowSamples[BUFFERSIZE];
-uint8_t MidSamples[BUFFERSIZE];
-uint8_t AvgLowRALong[BUFFERSIZE];
-uint8_t AvgMidRALong[BUFFERSIZE];
-// eventually replace the above with the below:
-//int LowSamplesArray[BUFFERSIZE];
-//int MidSamplesArray[BUFFERSIZE];
-//int AvgLowSamplesArray[BUFFERSIZE];
-//int AvgMidSamplesArray[BUFFERSIZE];
 byte getPos = 0;
 byte putPos = 0;
-byte nextPos = 0;
+byte NextPos = 0;
 bool OKFull = 0;
 
 int samples = 0;
-uint8_t FirstRun = 0;
 
+uint8_t LowBeatCurrent = 0;
+uint8_t LowBeatTimeDelta = 0;
+uint8_t LowBeatPrevious = 0;
+uint8_t LowSamplePos = 0;
 
-void setup() {
-    #ifdef DEBUG
-    Serial.begin(9600);
-    #endif
     
+void setup() {
     strip.begin();
     strip.show(); // Initialize all pixels to 'off'
 
-//    TIMSK0 = 0; // turn off timer0 for lower jitter
+    TIMSK0 = 0; // turn off timer0 for lower jitter
     ADCSRA = 0xe5; // set the adc to free running mode
     ADMUX = 0x40; // use adc0
     DIDR0 = 0x01; // turn off the digital input for adc0
 
-    doInit();
-}
-
-void doInit() {
     colorWipe(strip.Color((MaxBrightness * 255), 0, 0), 1);
     colorWipe(strip.Color(0, (MaxBrightness * 255), 0), 1);
     colorWipe(strip.Color(0, 0, (MaxBrightness * 255)), 1);
 }
 
 void loop() {
-
     sampleInput();
     sampleFix();
     
-    doAnalyze(); 
-//    doFade();
-
-//    drawSpectrum();
+    doAnalyze();    // analyze data, then drawSpectrum
+    
+    NextPos = (putPos + 1) & (BUFFERSIZE-1);        // our spot in our buffer array
+    if (NextPos > BUFFERSIZE-1) NextPos = BUFFERSIZE-1;
+    if (NextPos < 0) NextPos = 0;
+    putPos = NextPos;
 }
 
 void doFade() {
-    #ifdef DEBUG
-    Serial.println("doFade()");
-    #endif
-    
     uint8_t zBrightness = strip.getBrightness();
     if (zBrightness - FadeStep > 2) {
         zBrightness = zBrightness - FadeStep;
@@ -93,6 +74,10 @@ void doFade() {
 }
 
 void drawSpectrum () {
+    #ifdef DEBUG
+    Serial.println("drawSpectrum()");
+    #endif
+    
     strip.setBrightness(255);
     for (int i=0; i < displaySize; i++) {
         strip.setPixelColor(i, strip.Color(50, 0, 0));
@@ -106,14 +91,16 @@ void doAnalyze() {
     uint8_t zLowMax = 0;
     uint16_t zLowTotal = 0;
     float zLowAvg = 0;
+
     uint8_t zPrevLow = 0;
-//    if (FirstRun < BUFFERSIZE) {
+    uint8_t zPrevPrevLow = 0;
     
-    if (OKFull != 1) {
-        for (int i=0; i < putPos; i++) {
+    if (OKFull != 1) {              // so the average is based on sampled data, i.e., before the buffer is filled up
+        for (int i=0; i < putPos+1; i++) {
             zLowTotal += LowSamples[i];
             if (LowSamples[i] > zLowMax) {
                 zLowMax = LowSamples[i];
+                LowSamplePos = i;
             }
         }
         zLowAvg = zLowTotal/putPos;
@@ -123,54 +110,51 @@ void doAnalyze() {
             zLowTotal += LowSamples[i];
             if (LowSamples[i] > zLowMax) {
                 zLowMax = LowSamples[i];
+                LowSamplePos = i;
             }
         }
         zLowAvg = zLowTotal/BUFFERSIZE;
     }
-    currentMicros = micros();
     
-    float zLowAvgNorm = zLowAvg/255.;
-    float zLowMaxNorm = float(zLowMax)/255.;
-    float zLowVal = ((1-zLowMaxNorm)/(1-zLowAvgNorm));
-//    float zLowVal = (zLowMax-zLowAvg)/255.;
+    // currentMicros = micros();        // some attempt to check the timing of the beat. unfinished
+    // if (SampleL[LowBand] > zLowMax*.9) {
+        // LowBeatCurrent = currentMicros;
+        // LowBeatTimeDelta = LowBeatCurrent - LowBeatPrevious;
+        // LowBeatPrevious = LowBeatCurrent;
+    // }
+//    if (LowBeatTimeDelta > interval)
 
-/////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////
-//////////////////      how to detect a beat??
-/////////////////////////////////////////////////////////////////////////////
-////////////////////////// LEFT OFF HERE
-/////////////////////////////////////////////////////////////////////////////
-    uint8_t tempPos = 0;
-    if (putPos == 0) tempPos = BUFFERSIZE-1;
-    else tempPos = putPos-1;
-//    if (tempPos == 0) tempPos2 = BUFFURSIZE-1;
-//    else tempPos2 = tempPos-1;
-//    zPrevLow = (LowSamples[tempPos] + LowSamples[tempPos2])/2;
-    zPrevLow = LowSamples[tempPos];
-    zLowAttackSharpness = SampleL[LowBand] - zPrevLow;
-    zLowAttackSharpness = (zLowAttackSharpness * .2) + zLowAttackSharpness;
-    // if (SampleL[LowBand] > zLowAvg
+    if (putPos == 0) {
+        zPrevLow = BUFFERSIZE-1;
+        zPrevPrevLow = BUFFERSIZE-2;
+    }
+    else if ((putPos) == 1) {
+        zPrevPrevLow = BUFFERSIZE-1;
+    }
+    else {
+        zPrevLow = putPos-2;
+        zPrevPrevLow = putPos-3;
+    }
+    zPrevLow = LowSamples[zPrevLow];
+    zPrevPrevLow = LowSamples[zPrevPrevLow];
+    uint8_t zLowMin = 0;
+    if (zPrevPrevLow < zPrevLow) {            // get the lower of the two
+        zLowMin = zPrevPrevLow;
+    }
+    else {
+        zLowMin = zPrevLow;
+    }
 
-    if (SampleL[LowBand] > 200 && (currentMicros - previousMicros) > interval)
-    {
+    uint8_t zLowOnset = zLowMax - zLowMin;
+    if (zLowOnset/zLowMax > .9 && LowSamples[putPos] > zLowAvg) {
         drawSpectrum();
-        previousMicros = currentMicros;
     }
     else {
         doFade();
-    }    
-    
-//    if (SampleL[LowBand] > (zLowMax - int(255. * Threshold)))
-//    {
-//        drawSpectrum();
-//    }
-//    else {
-//        doFade();
-//    }
-//    if (SampleL[LowBand] < Threshold && zLowVal > 0) drawSpectrum();
+    }
 }
 
-void sampleInput() {
+void sampleInput() {    
     cli();  // UDRE interrupt slows this way down on arduino1.0
     for (int x=0; x<FHT_N; x++) {
         while(!(ADCSRA & 0x10)); // wait for adc to be ready
@@ -182,14 +166,15 @@ void sampleInput() {
         k <<= 6; // form into a 16b signed int
         fht_input[x] = k; // put real data into bins
     }
-    fht_window(); // window the data for better frequency response
+//    fht_window(); // window the data for better frequency response (which apparently fucks up the low end, hence being commented out)
     fht_reorder(); // reorder the data before doing the fht
     fht_run(); // process the data in the fht
+//    fht_mag_log();
     fht_mag_lin();
     sei();
 }
 
-void sampleFix() {
+void sampleFix() {   
     int newPos; 
     float fhtCount, tempY;
     int lowBin = 0;
@@ -208,12 +193,9 @@ void sampleFix() {
         OKFull = 1;
     }
     
-    LowSamples[putPos] = SampleL[LowBand];         // somewhere around 100 hz
-    MidSamples[putPos] = SampleL[MidBand];         // somewhere around 1000 hz
-    putPos = (putPos + 1) & (BUFFERSIZE-1);
-    if (putPos > BUFFERSIZE-1)putPos = BUFFERSIZE-1;
-    if (putPos < 0) putPos = 0;
-
+    unsigned long ztemp = micros();
+    LowSamples[putPos] = fht_lin_out[LowBand]/(FHT_N/2);         // somewhere around 100 hz
+//    MidSamples[putPos] = SampleL[MidBand];         // somewhere around 1000 hz
 }  
 
 // Fill the dots one after the other with a color
